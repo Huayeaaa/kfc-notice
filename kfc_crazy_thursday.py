@@ -67,9 +67,14 @@ HEADERS = {
     )
 }
 
+# 目标站点均为国内站点，直连即可；禁用系统代理读取，
+# 避免本机 VPN/代理开关导致请求失败（GitHub Actions 上无影响）
+SESSION = requests.Session()
+SESSION.trust_env = False
+
 
 def fetch_page(url: str) -> str:
-    r = requests.get(url, headers=HEADERS, timeout=20)
+    r = SESSION.get(url, headers=HEADERS, timeout=20)
     r.raise_for_status()
     r.encoding = r.apparent_encoding
     return r.text
@@ -109,17 +114,24 @@ def extract_menu(text: str) -> str:
     items = [ln for ln in lines if re.match(r"^\d+\s*[、.．]", ln)]
     if not items:
         return None
-    menu = "\n".join(items)
+    # Server酱按 Markdown 渲染：普通单换行会被合并成一行，
+    # 必须转成列表语法才能逐项分行；价格加粗便于快速扫读
+    md_items = []
+    for ln in items:
+        item = re.sub(r"^\d+\s*[、.．]\s*", "", ln)          # 去掉原始编号
+        item = re.sub(r"(\d+(?:\.\d+)?元)", r"**\1**", item)  # 价格加粗
+        md_items.append(f"- {item}")
+    menu = "\n".join(md_items)
     note = next((ln for ln in lines if ln.startswith("注")), None)
     if note:
-        menu += f"\n{note}"
+        menu += f"\n> {note}"  # 备注用引用样式
     return menu
 
 
 def push_one(sendkey: str, title: str, desp: str):
     """给单个 SendKey 推送。返回 (是否成功, 描述)"""
     try:
-        r = requests.post(
+        r = SESSION.post(
             f"https://sctapi.ftqq.com/{sendkey}.send",
             data={"title": title[:32], "desp": desp},
             timeout=20,
@@ -220,7 +232,11 @@ def main():
     if menu:
         body = f"更新于 {update_date.month}月{update_date.day}日\n\n{menu}"
     else:
-        body = f"信息源：{url}（更新于 {update_date.month}月{update_date.day}日）\n\n" + text[:3500]
+        # 兜底推原文：单换行转成 Markdown 硬换行（两空格+换行），避免被合并
+        body = (
+            f"信息源：{url}（更新于 {update_date.month}月{update_date.day}日）\n\n"
+            + text[:3500].replace("\n", "  \n")
+        )
     push(f"🍗 肯德基疯狂星期四（{today.month}月{today.day}日）", body)
     write_state(tag)
 
