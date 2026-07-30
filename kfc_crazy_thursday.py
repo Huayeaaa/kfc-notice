@@ -51,7 +51,13 @@ SENDKEYS = [
     ).split(",")
     if k.strip()
 ]
-FRESH_DAYS = 10  # 距今天超过该天数视为"源过期"
+FRESH_DAYS = 10   # 选源时：距今天超过该天数视为"源过期"，尝试下一个源
+RECENT_DAYS = 2   # 推送前：更新日期必须在最近 N 天内，否则视为"本周尚未更新"，跳过等重试
+
+# 状态去重：记录已推送过的"更新日期"，同一天多个 cron 时间点重试不会重复推送
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_push")
+FORCE_PUSH = os.environ.get("FORCE_PUSH") == "1"     # 手动触发时强制重推（忽略状态）
+FINAL_SLOT = os.environ.get("KFC_FINAL_SLOT") == "1"  # 当天最后一个重试时间点
 
 CST = timezone(timedelta(hours=8))
 HEADERS = {
@@ -165,6 +171,19 @@ def pick_fresh_source(today):
     return None, "\n".join(report), None
 
 
+def read_state() -> str:
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def write_state(tag: str):
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        f.write(tag)
+
+
 def main():
     today = datetime.now(CST)
     url, text, update_date = pick_fresh_source(today)
@@ -177,6 +196,25 @@ def main():
         )
         sys.exit(1)
 
+    # 严校验：更新日期距今超过 RECENT_DAYS 天，说明还是上周的内容，本周尚未更新
+    age = (today - update_date).days
+    if age > RECENT_DAYS:
+        print(f"源最近更新为 {update_date.date()}（{age} 天前），本周菜单尚未更新，本次跳过，等待重试")
+        if FINAL_SLOT:
+            # 当天最后一个时间点仍没更新 → 告知用户，避免"无声错过"
+            push(
+                "🍗 疯四菜单暂未更新",
+                f"截至今天中午信息源仍未发布本周菜单（最后更新 {update_date.date()}）。"
+                f"可稍后手动查看：{url}",
+            )
+        sys.exit(0)
+
+    # 状态去重：同一期菜单已推过就跳过（多个 cron 时间点重试不会重复推送）
+    tag = str(update_date.date())
+    if not FORCE_PUSH and read_state() == tag:
+        print(f"{tag} 期菜单已推送过，跳过")
+        sys.exit(0)
+
     # 优先推送提炼后的纯菜单；提炼失败（源改版）时兜底推原文前 3500 字
     menu = extract_menu(text)
     if menu:
@@ -184,6 +222,7 @@ def main():
     else:
         body = f"信息源：{url}（更新于 {update_date.month}月{update_date.day}日）\n\n" + text[:3500]
     push(f"🍗 肯德基疯狂星期四（{today.month}月{today.day}日）", body)
+    write_state(tag)
 
 
 if __name__ == "__main__":

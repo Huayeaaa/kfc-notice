@@ -2,8 +2,16 @@ name: KFC Crazy Thursday
 
 on:
   schedule:
-    - cron: "30 1 * * 4"   # 每周四 09:30 北京时间（UTC 01:30）
-  workflow_dispatch:        # 支持手动触发测试
+    # 每周四 4 个时间点（北京时间 09:30 / 10:30 / 11:30 / 12:30），
+    # 文章若上午还没更新，后续时间点自动重试；已推过会自动跳过，不会重复推送
+    - cron: "30 1 * * 4"   # 09:30
+    - cron: "30 2 * * 4"   # 10:30
+    - cron: "30 3 * * 4"   # 11:30
+    - cron: "30 4 * * 4"   # 12:30（最后一轮，届时仍未更新会发一条提醒）
+  workflow_dispatch:        # 支持手动触发（强制重推，忽略去重状态）
+
+permissions:
+  contents: write   # 用于回写 .last_push 状态文件
 
 jobs:
   push:
@@ -21,4 +29,16 @@ jobs:
         env:
           # 多人推送：secret 里存逗号分隔的多个 SendKey，如 key1,key2,key3
           SCT_SENDKEYS: ${{ secrets.SCT_SENDKEYS }}
+          # 手动触发 = 强制重推；定时最后一轮 = 若未更新发提醒
+          FORCE_PUSH: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          KFC_FINAL_SLOT: ${{ github.event.schedule == '30 4 * * 4' && '1' || '0' }}
         run: python kfc_crazy_thursday.py
+
+      - name: 回写推送状态
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .last_push
+          git diff --cached --quiet || git commit -m "chore: update push state [skip ci]"
+          git push
