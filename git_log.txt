@@ -1,4 +1,0 @@
-rm '.idea/.gitignore'
-rm '.idea/KFC_DEMO.iml'
-rm '.idea/inspectionProfiles/profiles_settings.xml'
-rm '.idea/modules.xml'
