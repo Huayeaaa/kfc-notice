@@ -1,0 +1,24 @@
+name: KFC Crazy Thursday
+
+on:
+  schedule:
+    - cron: "30 1 * * 4"   # 每周四 09:30 北京时间（UTC 01:30）
+  workflow_dispatch:        # 支持手动触发测试
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: 抓取并推送疯四清单
+        env:
+          # 多人推送：secret 里存逗号分隔的多个 SendKey，如 key1,key2,key3
+          SCT_SENDKEYS: ${{ secrets.SCT_SENDKEYS }}
+        run: python kfc_crazy_thursday.py
