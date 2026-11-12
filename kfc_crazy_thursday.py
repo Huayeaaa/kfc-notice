@@ -35,7 +35,6 @@ except Exception:
 #   - 成都本地宝页面持续更新，作为兜底的全国菜单源
 # 可用环境变量 KFC_ARTICLE_URLS（逗号分隔）覆盖整个列表
 _DEFAULT_URLS = [
-    "https://sz.bendibao.com/youhui/2024111/953973.shtm",
     "https://cd.bendibao.com/youhui/202474/186068.shtm",
 ]
 ARTICLE_URLS = [
@@ -62,8 +61,7 @@ FINAL_SLOT = os.environ.get("KFC_FINAL_SLOT") == "1"  # 当天最后一个重试
 CST = timezone(timedelta(hours=8))
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0"
     )
 }
 
